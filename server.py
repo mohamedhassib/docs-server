@@ -3,6 +3,7 @@ import os
 import sys
 import threading
 import logging
+import re
 
 # Set up logging
 logging.basicConfig(
@@ -99,6 +100,23 @@ def generate_project_cards(projects):
         </div>
         """
     return cards
+
+
+def inject_html_into_index(index_file_path, html_line):
+    logging.info(f"Inject sylndr logo, {index_file_path}")
+    with open(index_file_path, 'r') as f:
+        content = f.read()
+    if html_line not in content:
+        content = re.sub(r'(placeholder="Search for models\.\.\."\s*\/?>)', r'\1\\n' + html_line + ' ', content)
+        with open(index_file_path, 'w') as f:
+            f.write(content)
+    else:
+        print(f"Logo found in {index_file_path}")
+
+for project in projects:
+    index_file_path = os.path.join(dir_path, project.replace(' ', '_'), "index.html")
+    html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="../logo.png" alt="Sylndr Logo"></a>'
+    inject_html_into_index(index_file_path, html_line_to_inject)
 
 # HTTP request handler
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
