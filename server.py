@@ -6,7 +6,7 @@ import logging
 import re
 
 
-docs_path = "./html_docs"
+docs_path = "./dbt_docs"
 host = '0.0.0.0'
 port = 8000
 
