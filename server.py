@@ -1,5 +1,15 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import os
+import sys
+import threading
+import logging
+
+# Set up logging
+logging.basicConfig(
+    stream=sys.stdout,  # Log to standard output
+    level=logging.INFO, # Set the logging level to INFO
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # HTML template for the home page
 home_page_template = """
@@ -36,24 +46,27 @@ home_page_template = """
             text-align: center;
             margin-bottom: 30px;
         }}
-        ul {{
-            list-style-type: none;
-            padding: 0;
-            text-align: center;
+        .card {{
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
         }}
-        li {{
-            margin-bottom: 10px;
+        .card h2 {{
+            margin-top: 0;
         }}
-        li a {{
-            display: inline-block;
+        .card a {{
+            display: block;
             padding: 10px 20px;
             background-color: #007bff;
             color: #fff;
             text-decoration: none;
+            text-align: center;
             border-radius: 5px;
             transition: background-color 0.3s ease;
         }}
-        li a:hover {{
+        .card a:hover {{
             background-color: #0056b3;
         }}
     </style>
@@ -64,9 +77,7 @@ home_page_template = """
             <img src="logo.png" alt="Logo">
         </header>
         <h1>Welcome to Our Projects Documentation</h1>
-        <ul>
-            {}
-        </ul>
+        {}
     </div>
 </body>
 </html>
@@ -76,14 +87,18 @@ home_page_template = """
 dir_path = "./html_docs"
 
 # Get list of directories in the path
-projects = [d for d in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, d))]
+projects = [d.replace('_', ' ').title() for d in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, d))]
 
-# Function to generate list items for projects
-def generate_list_items(projects):
-    items = ""
+def generate_project_cards(projects):
+    cards = ""
     for project in projects:
-        items += f'<li><a href="{project}/">{project.capitalize()}</a></li>'
-    return items
+        cards += f"""
+        <div class="card">
+            <h2>{project}</h2>
+            <a href="{project.replace(' ', '_')}/">View Documentation</a>
+        </div>
+        """
+    return cards
 
 # HTTP request handler
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -94,7 +109,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(home_page_template.format(generate_list_items(projects)).encode())
+            self.wfile.write(home_page_template.format(generate_project_cards(projects)).encode())
         else:
             # Serve requested file or directory
             try:
@@ -104,18 +119,33 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
                 # File or directory not found
                 self.send_error(404, "File not found")
 
-# Server configuration
-host = 'localhost'
+
+host = '0.0.0.0'
 port = 8000
 
-# Change the current working directory to the directory containing project directories
 os.chdir(dir_path)
 
-# Create HTTP server
+def restart_server():
+    print(f"Server restsrting at http://{host}:{port}")
+    logging.info(f"Server restsrting at http://{host}:{port}")
+    os.chdir('../')
+    httpd.shutdown()
+    httpd.server_close()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
 httpd = HTTPServer((host, port), MyHTTPRequestHandler)
 
-# Server initialization message
-print(f"Server running at http://{host}:{port}")
+# Start a thread to restart the server every 5 minutes
+try:
+    threading.Timer(600.0, restart_server).start()
+except Exception as e:
+    logging.error(f"Error while starting restart thread: {e}")
 
-# Start server
-httpd.serve_forever()
+try:
+    print(f"Server running at http://{host}:{port}")
+    logging.info(f"Server running at http://{host}:{port}")
+    httpd.serve_forever()
+except KeyboardInterrupt:
+    httpd.server_close()
+    logging.info("Server stopped by the user")
+    print("Server stopped")
