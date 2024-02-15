@@ -5,6 +5,11 @@ import threading
 import logging
 import re
 
+
+docs_path = "./html_docs"
+host = '0.0.0.0'
+port = 8000
+
 # Set up logging
 logging.basicConfig(
     stream=sys.stdout,  # Log to standard output
@@ -84,11 +89,9 @@ home_page_template = """
 </html>
 """
 
-# Directory containing directories
-dir_path = "./html_docs"
 
 # Get list of directories in the path
-projects = [d.replace('_', ' ').title() for d in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, d))]
+projects = [d.replace('_', ' ').title() for d in os.listdir(docs_path) if os.path.isdir(os.path.join(docs_path, d))]
 
 def generate_project_cards(projects):
     cards = ""
@@ -114,7 +117,7 @@ def inject_html_into_index(index_file_path, html_line):
         print(f"Logo found in {index_file_path}")
 
 for project in projects:
-    index_file_path = os.path.join(dir_path, project.replace(' ', '_'), "index.html")
+    index_file_path = os.path.join(docs_path, project.replace(' ', '_'), "index.html")
     html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="../logo.png" alt="Sylndr Logo"></a>'
     inject_html_into_index(index_file_path, html_line_to_inject)
 
@@ -138,10 +141,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
                 self.send_error(404, "File not found")
 
 
-host = '0.0.0.0'
-port = 8000
 
-os.chdir(dir_path)
+os.chdir(docs_path)
 
 def restart_server():
     print(f"Server restsrting at http://{host}:{port}")
