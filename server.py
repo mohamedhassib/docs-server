@@ -8,7 +8,9 @@ import re
 
 docs_path = "./dbt_docs"
 host = '0.0.0.0'
-port = 8000
+port = 8001
+# Get list of directories in the path
+projects = [d for d in os.listdir(docs_path) if os.path.isfile(os.path.join(docs_path, d)) and 'html' in d]
 
 # Set up logging
 logging.basicConfig(
@@ -90,36 +92,32 @@ home_page_template = """
 """
 
 
-# Get list of directories in the path
-projects = [d.replace('_', ' ').title() for d in os.listdir(docs_path) if os.path.isdir(os.path.join(docs_path, d))]
-
 def generate_project_cards(projects):
     cards = ""
     for project in projects:
         cards += f"""
         <div class="card">
-            <h2>{project}</h2>
-            <a href="{project.replace(' ', '_')}/">View Documentation</a>
+            <h2>{project.split('.')[0].replace('_', ' ').title()}</h2>
+            <a href="{project}">View Documentation</a>
         </div>
         """
     return cards
 
 
-def inject_html_into_index(index_file_path, html_line):
-    logging.info(f"Inject sylndr logo, {index_file_path}")
-    with open(index_file_path, 'r') as f:
-        content = f.read()
-    if html_line not in content:
-        content = re.sub(r'(placeholder="Search for models\.\.\."\s*\/?>)', r'\1\\n' + html_line + ' ', content)
-        with open(index_file_path, 'w') as f:
-            f.write(content)
-    else:
-        print(f"Logo found in {index_file_path}")
+def inject_html_into_index(projects):
+    for project in projects:
+        index_file_path = os.path.join(docs_path, project)
+        logging.info(f"Inject sylndr logo, {index_file_path}")
+        html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="../logo.png" alt="Sylndr Logo"></a>'
+        with open(index_file_path, 'r') as f:
+            content = f.read()
+        if html_line_to_inject not in content:
+            content = re.sub(r'(placeholder="Search for models\.\.\."\s*\/?>)', r'\1\\n' + html_line_to_inject + ' ', content)
+            with open(index_file_path, 'w') as f:
+                f.write(content)
+        else:
+            print(f"Logo found in {index_file_path}")
 
-for project in projects:
-    index_file_path = os.path.join(docs_path, project.replace(' ', '_'), "index.html")
-    html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="../logo.png" alt="Sylndr Logo"></a>'
-    inject_html_into_index(index_file_path, html_line_to_inject)
 
 # HTTP request handler
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -138,9 +136,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
                 return SimpleHTTPRequestHandler.do_GET(self)
             except FileNotFoundError:
                 # File or directory not found
-                self.send_error(404, "File not found")
+                self.send_error(404, f"File not found")
 
 
+inject_html_into_index(projects)
 
 os.chdir(docs_path)
 
