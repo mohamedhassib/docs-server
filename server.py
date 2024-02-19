@@ -1,25 +1,27 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import os
 import sys
-import threading
 import logging
 import re
+from contextlib import contextmanager
+from typing import Generator
+import configparser
+from google.cloud import storage
+from pathlib import Path
 
+config = configparser.ConfigParser()
+config.read('config.ini') 
+docs_path= config.get('Settings', 'docs_path')
+gcs_bucket= config.get('Settings', 'gcs_bucket')
+host= config.get('Settings', 'host')
+port= int(config.get('Settings', 'port'))
 
-docs_path = "./dbt_docs"
-host = '0.0.0.0'
-port = 8001
-# Get list of directories in the path
-projects = [d for d in os.listdir(docs_path) if os.path.isfile(os.path.join(docs_path, d)) and 'html' in d]
-
-# Set up logging
 logging.basicConfig(
     stream=sys.stdout,  # Log to standard output
     level=logging.INFO, # Set the logging level to INFO
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# HTML template for the home page
 home_page_template = """
 <!DOCTYPE html>
 <html lang="en">
@@ -91,6 +93,23 @@ home_page_template = """
 </html>
 """
 
+@contextmanager
+def get_gcs_connection() -> Generator[storage.Client, None, None]:
+
+    gcsclient = storage.Client(project="pricing-338819")
+    try:
+        yield gcsclient
+    finally:
+        ...
+
+def download_gcs_file(gcs_bucket):
+    with get_gcs_connection() as gcsclient:
+        bucket = gcsclient.get_bucket(gcs_bucket)
+        blobs = bucket.list_blobs(prefix='dbt_docs')
+        for blob in blobs:
+            filename = Path(blob.name)
+            filename.parent.mkdir(parents=True, exist_ok=True)
+            blob.download_to_filename(filename)
 
 def generate_project_cards(projects):
     cards = ""
@@ -104,11 +123,12 @@ def generate_project_cards(projects):
     return cards
 
 
-def inject_html_into_index(projects):
+def inject_html_into_index(docs_path):
+    projects = [p for p in os.listdir(docs_path) if os.path.isfile(os.path.join(docs_path, p)) and 'html' in p]
     for project in projects:
         index_file_path = os.path.join(docs_path, project)
         logging.info(f"Inject sylndr logo, {index_file_path}")
-        html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="../logo.png" alt="Sylndr Logo"></a>'
+        html_line_to_inject = '<a href="/"><img style="width: 62; height: 25px; float:right; margin-left:50px;" class="logo" src="logo.png" alt="Sylndr Logo"></a>'
         with open(index_file_path, 'r') as f:
             content = f.read()
         if html_line_to_inject not in content:
@@ -117,9 +137,8 @@ def inject_html_into_index(projects):
                 f.write(content)
         else:
             print(f"Logo found in {index_file_path}")
+    return projects
 
-
-# HTTP request handler
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
     # Override the do_GET method to handle directory requests
     def do_GET(self):
@@ -130,40 +149,26 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(home_page_template.format(generate_project_cards(projects)).encode())
         else:
-            # Serve requested file or directory
             try:
-                # Call the superclass method to handle requests
                 return SimpleHTTPRequestHandler.do_GET(self)
             except FileNotFoundError:
-                # File or directory not found
                 self.send_error(404, f"File not found")
 
-
-inject_html_into_index(projects)
-
-os.chdir(docs_path)
-
-def restart_server():
-    print(f"Server restsrting at http://{host}:{port}")
-    logging.info(f"Server restsrting at http://{host}:{port}")
-    os.chdir('../')
-    httpd.shutdown()
-    httpd.server_close()
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
-httpd = HTTPServer((host, port), MyHTTPRequestHandler)
-
-# Start a thread to restart the server every 5 minutes
 try:
-    threading.Timer(600.0, restart_server).start()
+    logging.info(f"Start downloading docs")
+    download_gcs_file("sylndr-dbt-docs")
+    try:
+        projects = inject_html_into_index(docs_path)
+        os.chdir(docs_path)
+        httpd = HTTPServer((host, port), MyHTTPRequestHandler)
+        logging.info(f"Server running at http://{host}:{port}")
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        httpd.server_close()
+        logging.info("Server stopped by the user")
+    except Exception as e:
+        logging.info(f"An error occurred {e}")
+
 except Exception as e:
-    logging.error(f"Error while starting restart thread: {e}")
+    logging.error(f"Error while downloading docs: {e}")
 
-try:
-    print(f"Server running at http://{host}:{port}")
-    logging.info(f"Server running at http://{host}:{port}")
-    httpd.serve_forever()
-except KeyboardInterrupt:
-    httpd.server_close()
-    logging.info("Server stopped by the user")
-    print("Server stopped")
