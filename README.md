@@ -1,4 +1,4 @@
-# Simple Python Web Server
+# Simple Docs Web Server
 
 This is a simple Python web server that serves static dbt projects docs.
 

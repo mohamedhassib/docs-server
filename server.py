@@ -8,11 +8,11 @@ from typing import Generator
 import configparser
 from google.cloud import storage
 from pathlib import Path
+
 config = configparser.ConfigParser()
 config.read('config.ini') 
 docs_path= config.get('Settings', 'docs_path')
 gcs_bucket= config.get('Settings', 'gcs_bucket')
-key_path = config.get('Settings', 'key_path')
 host= config.get('Settings', 'host')
 port= int(config.get('Settings', 'port'))
 
