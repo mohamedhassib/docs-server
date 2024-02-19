@@ -17,8 +17,12 @@ This is a simple Python web server that serves static dbt projects docs.
 
 ## With Docker
 
-1. Build app image `docker build -t docs-server . `
-2. Run a container `docker run -d -p 8000:8000 -v ./dbt_docs:/app/dbt_docs --name docs-server docs-server`
+1. Build app image `docker build -t dbt-docs-server . `
+2. Run a container `docker run -d -p 8000:8000 -v $HOME/.config/gcloud:/root/.config/gcloud --name docs-server docs-server`
+
+## Publish image
+
+1. `gcloud builds submit --tag us.gcr.io/pricing-338819/dbt-docs-server:latest .`
 
 ## Contributing
 
